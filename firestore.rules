@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (request.auth.token.email == 'PlaridelMUST@gmail.com' && request.auth.token.email_verified == true);
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Transaction Validation ---
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['userId', 'date', 'item', 'category', 'amount'])
+        && data.userId == request.auth.uid
+        && data.item is string && data.item.size() > 0 && data.item.size() <= 200
+        && data.category in ['Food', 'Clothing', 'Transportation', 'Income', 'Loan']
+        && data.amount is number
+        && data.date is timestamp;
+    }
+
+    // --- Report Validation ---
+    function isValidReport(data) {
+      return data.keys().hasAll(['userId', 'reportName', 'aiPrompt', 'frequency', 'status', 'createdAt'])
+        && data.userId == request.auth.uid
+        && data.reportName is string && data.reportName.size() > 0 && data.reportName.size() <= 100
+        && data.aiPrompt is string && data.aiPrompt.size() <= 6000
+        && data.frequency in ['once', '1min', 'daily', 'monthly']
+        && data.status in ['active', 'paused']
+        && data.createdAt is timestamp
+        && (!data.keys().contains('startDate') || data.startDate is timestamp)
+        && (!data.keys().contains('endDate') || data.endDate is timestamp)
+        && (!data.keys().contains('lastRun') || data.lastRun is timestamp);
+    }
+
+    function isValidGeneratedReport(data) {
+      return data.keys().hasAll(['userId', 'reportName', 'createdAt', 'netChange', 'transactionCount', 'pdfData'])
+        && data.userId == request.auth.uid
+        && data.reportName is string && data.reportName.size() > 0
+        && data.createdAt is timestamp
+        && data.netChange is number
+        && data.transactionCount is number
+        && data.pdfData is string && data.pdfData.size() <= 1048576; // 1MB limit for base64 in Firestore
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['userId', 'messages', 'updatedAt'])
+        && data.keys().size() == 3
+        && data.userId == request.auth.uid
+        && data.messages is list
+        && data.messages.size() <= 100
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Main Collections ---
+
+    match /transactions/{transactionId} {
+      allow create: if isVerified() && isValidId(transactionId) && isValidTransaction(incoming()) && incoming().keys().size() == 5;
+      allow update: if isVerified() && isValidId(transactionId)
+        && isValidTransaction(incoming()) 
+        && isOwner(existing().userId)
+        && incoming().userId == existing().userId
+        && incoming().diff(existing()).affectedKeys().hasOnly(['item', 'category', 'amount', 'date']);
+      allow delete: if isVerified() && isValidId(transactionId) && isOwner(existing().userId);
+      allow get: if isVerified() && isValidId(transactionId) && isOwner(existing().userId);
+      allow list: if isVerified() && resource.data.userId == request.auth.uid;
+    }
+
+    match /reports/{reportId} {
+      allow create: if isVerified() && isValidId(reportId) && isValidReport(incoming())
+        && incoming().keys().size() >= 6 && incoming().keys().size() <= 9
+        && incoming().createdAt == request.time;
+      allow update: if isVerified() && isValidId(reportId)
+        && isValidReport(incoming()) 
+        && isOwner(existing().userId)
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['reportName', 'aiPrompt', 'frequency', 'status', 'startDate', 'endDate', 'lastRun']);
+      allow delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      allow get: if isVerified() && isOwner(existing().userId);
+      allow list: if isVerified() && resource.data.userId == request.auth.uid;
+    }
+
+    match /generated_reports/{reportId} {
+      allow create: if isVerified() && isValidId(reportId) && isValidGeneratedReport(incoming())
+        && incoming().createdAt == request.time;
+      allow delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      allow get: if isVerified() && isOwner(existing().userId);
+      allow list: if isVerified() && resource.data.userId == request.auth.uid;
+    }
+
+    match /chat_history/{chatId} {
+      allow create: if isVerified() && isValidId(chatId) && isValidChat(incoming());
+      allow update: if isVerified() && isValidId(chatId) 
+        && isValidChat(incoming())
+        && isOwner(existing().userId)
+        && incoming().userId == existing().userId;
+      allow delete: if isVerified() && isValidId(chatId) && isOwner(existing().userId);
+      allow get: if isVerified() && isValidId(chatId) && isOwner(existing().userId);
+      allow list: if isVerified() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

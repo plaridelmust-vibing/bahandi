@@ -1,0 +1,6 @@
+{
+  "name": "Bahandi 2.2",
+  "description": "A personal expense tracker with real-time Firestore sync, category spending analytics, income/expense trends, and AI-ready reporting capabilities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

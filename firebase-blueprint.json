@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A single financial record (income or expense)",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner of the transaction" },
+        "date": { "type": "string", "format": "date-time", "description": "When the transaction occurred" },
+        "item": { "type": "string", "description": "Description of the item" },
+        "category": { "type": "string", "enum": ["Food", "Clothing", "Transportation", "Income", "Loan"], "description": "Category for classification" },
+        "amount": { "type": "number", "description": "Value (positive for income, negative for expense)" }
+      },
+      "required": ["userId", "date", "item", "category", "amount"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "An AI-ready report template",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner of the report template" },
+        "reportName": { "type": "string", "description": "Name of the report" },
+        "aiPrompt": { "type": "string", "description": "Prompt for the AI agent" },
+        "frequency": { "type": "string", "enum": ["once", "1min", "daily", "monthly"], "description": "How often to trigger" },
+        "status": { "type": "string", "enum": ["active", "paused"], "description": "Template status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the template was created" },
+        "lastRun": { "type": "string", "format": "date-time", "description": "When the report was last generated" },
+        "startDate": { "type": "string", "format": "date-time", "description": "Optional start date for filtering" },
+        "endDate": { "type": "string", "format": "date-time", "description": "Optional end date for filtering" }
+      },
+      "required": ["userId", "reportName", "aiPrompt", "frequency", "status", "createdAt"]
+    },
+    "GeneratedReport": {
+      "title": "Generated Report",
+      "description": "A generated PDF report file stored as a document",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "reportName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "netChange": { "type": "number" },
+        "transactionCount": { "type": "number" },
+        "pdfData": { "type": "string", "description": "Base64 encoded PDF content" }
+      },
+      "required": ["userId", "reportName", "createdAt", "netChange", "transactionCount", "pdfData"]
+    },
+    "ChatHistory": {
+      "title": "Chat History",
+      "description": "A collection of messages in a conversation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "messages", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Collection of all transactions"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Collection of report templates"
+    },
+    "/generated_reports/{reportId}": {
+      "schema": "GeneratedReport",
+      "description": "Collection of generated PDF reports"
+    },
+    "/chat_history/{chatId}": {
+      "schema": "ChatHistory",
+      "description": "Collection of chat history documents"
+    }
+  }
+}
